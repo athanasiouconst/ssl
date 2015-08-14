@@ -1,0 +1,6 @@
+{
+  "name": "SSL Library",
+  "version": "1.0.0",
+  "info": "Provide a SSL library",
+  "type": "library"
+}
