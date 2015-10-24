@@ -10,30 +10,7 @@
  * @link	https://github.com/dmyers2004
  */
 class Ssl {
-	public $storage;
-	protected $public;
-	protected $private;
-	protected $base64 = true; /* make it a little more portable */
-
-	public function __construct() {
-		$this->storage = __DIR__.'/keys';
-		$this->private = $this->storage.'/private-key.txt';
-		$this->public  = $this->storage.'/public-key.txt';
-		
-		@mkdir($this->storage,0777,true);
-		
-		/* if the keys aren't found then create them */
-		if (!file_exists($this->private)) {
-			$this->create_keys();
-		}
-	}
-
-	public function migration_down() {
-		@unlink($this->private);
-		@unlink($this->public);
-		@rmdir($this->storage);
-	}
-
+	/* switch from http to https */
 	public function force_ssl() {	
 		// get the CI instance to access the CI resources
 		$CI = & get_instance();
@@ -48,7 +25,8 @@ class Ssl {
 			redirect($CI->uri->uri_string());
 		}
 	}
-
+	
+	/* switch from https to http */
 	public function remove_ssl() {	
 		$CI = & get_instance();
 		// Change the base_url to have http prefix
@@ -61,93 +39,111 @@ class Ssl {
 			redirect($CI->uri->uri_string());
 		}
 	}
-
+	
+	/* are we in https mode? */
 	public function is_https() {	
 		return ((!empty($_SERVER['HTTPS']) and strtolower($_SERVER['HTTPS']) !== 'off'));
 	}
+	
+	/*
+	after creating your keys
+	you will need to move the private key to a safe location
+	preferably on another box
+	*/
+	public function create($bits=2048,$folder=null) {
+		$folder = ($folder) ? rtrim($folder,'/') : __DIR__;
 
-	public function base64() {	
-		$this->base64 = true;
+		$public = $folder.'/public.key';
+		$private = $folder.'/private.key';
 
-		return $this;
+		if (!is_writable($folder)) {
+			throw new Exception('folder is not writable');
+		}
+
+		$config = [
+			'private_key_bits' => $bits,
+			'private_key_type' => OPENSSL_KEYTYPE_RSA,
+		];
+
+		$private_key = openssl_pkey_new($config);
+
+		openssl_pkey_export_to_file($private_key,$private);
+
+		$public_key = openssl_pkey_get_details($private_key);
+
+		file_put_contents($public, $public_key['key']);
+
+		openssl_free_key($private_key);
 	}
+	
+	/* encrypt data of any length */
+	public function encrypt($data,$key_file=null) {
+		$file = ($key_file) ? $key_file : __DIR__.'/public.key';
 
-	public function raw() {	
-		$this->base64 = false;
+		if (!file_exists($file)) {
+			throw new Exception('Count not locate '.basename($file));
+		}
 
-		return $this;
-	}
+		if (!$key = openssl_pkey_get_public('file://'.$file)) {
+			throw new Exception('Could not get public key');
+		}
 
-	public function encrypt($cleartext) {	
-		$crypttext = '';
+		$details = openssl_pkey_get_details($key);
 
-		$success = openssl_public_encrypt($cleartext, $crypttext, file_get_contents($this->public));
+		$length = ceil($details['bits'] / 8) - 11;
 
-		return ($success) ? $this->encode($crypttext) : null;
-	}
+		$output = '';
 
-	public function decrypt($crypttext) {	
-		$decrypted = '';
+		while($data) {
+			$chunk = substr($data, 0, $length);
+			$data = substr($data, $length);
+			$encrypted = '';
 
-		$success = openssl_private_decrypt($this->decode($crypttext), $decrypted, file_get_contents($this->private));
-
-		return ($success) ? $decrypted : null;
-	}
-
-	protected function create_keys() {	
-		/* create any folder(s) that are needed depending on where we are storing the keys */
-		if (!file_exists($this->storage)) {
-			if (!mkdir($this->storage, 0777, true)) {
-				show_error('Could not create OpenSSL key storage folder');
+			if (!openssl_public_encrypt($chunk, $encrypted, $key)) {
+				throw new Exception('Failed to encrypt data');
 			}
+
+			$output .= $encrypted;
 		}
 
-		/* Create the keypair */
-		$res = openssl_pkey_new();
+		openssl_free_key($key);
 
-		if ($res === FALSE) {
-			show_error('OpenSSL resource could not be created.');
+		return $output;
+	}
+	
+	/* decrypt data of any length */
+	public function decrypt($data,$key_file=null) {
+		$file = ($key_file) ? $key_file : __DIR__.'/private.key';
+
+		if (!file_exists($file)) {
+			throw new Exception('Count not locate '.basename($file));
 		}
 
-		/* Get private key */
-		$privatekey = '';
-
-		/* Sets $privatekey by reference */
-		$success = openssl_pkey_export($res, $privatekey);
-
-		if ($success === FALSE) {
-			show_error('OpenSSL export could not be created.');
+		if (!$key = openssl_pkey_get_private('file://'.$file)) {
+			throw new Exception('Could not get private key');
 		}
 
-		/* Get public key */
-		$publickey = openssl_pkey_get_details($res);
+		$details = openssl_pkey_get_details($key);
 
-		if ($success === FALSE) {
-			show_error('OpenSSL details could not be created.');
+		$length = ceil($details['bits'] / 8);
+
+		$output = '';
+
+		while($data) {
+			$chunk = substr($data, 0, $length);
+			$data = substr($data, $length);
+			$decrypted = '';
+
+			if (!openssl_private_decrypt($chunk, $decrypted, $key)) {
+				throw new Exception('Failed to decrypt data');
+			}
+
+			$output .= $decrypted;
 		}
 
-		/* extract the key */
-		$publickey = $publickey['key'];
+		openssl_free_key($key);
 
-		/* save them */
-		$success = file_put_contents($this->private, $privatekey);
-
-		if ($success === FALSE) {
-			show_error('OpenSSL private key could not be created.');
-		}
-
-		$success = file_put_contents($this->public, $publickey);
-
-		if ($success === FALSE) {
-			show_error('OpenSSL public key could not be created.');
-		}
+		return $output;
 	}
 
-	protected function encode($input) {	
-		return ($this->base64) ? strtr(base64_encode($input), ['+' => '.', '=' => '-', '/' => '~']) : $input;
-	}
-
-	protected function decode($input) {	
-		return ($this->base64) ? base64_decode(strtr($input, ['.' => '+', '-' => '=', '~' => '/'])) : $input;
-	}
 } /* end class */
