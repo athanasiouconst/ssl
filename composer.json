@@ -1,0 +1,34 @@
+{
+    "name": "projectorangebox/ssl",
+    "description": "Provide a SSL library",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://github.com/ProjectOrangeBox",
+    "keywords": [
+        "codeigniter",
+        "framework",
+        "orange"
+    ],
+    "authors": [
+        {
+            "name": "Don Myers",
+            "email": "donmyers@projectorangebox.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.5",
+        "projectorangebox/orange": "dev-master"
+    },
+    "orange": {
+        "version": "1.0.0",
+        "type": "library",
+        "priority": 80,
+        "notes": "",
+        "cli": {},
+        "help": "",
+        "tables": "",
+        "access": "",
+        "menubar": "",
+        "setting": ""
+    }
+}
