@@ -11,7 +11,7 @@
  */
 class Ssl {
 	/* switch from http to https */
-	public function force_ssl() {	
+	public function force_ssl() {
 		// get the CI instance to access the CI resources
 		$CI = & get_instance();
 
@@ -25,9 +25,9 @@ class Ssl {
 			redirect($CI->uri->uri_string());
 		}
 	}
-	
+
 	/* switch from https to http */
-	public function remove_ssl() {	
+	public function remove_ssl() {
 		$CI = & get_instance();
 		// Change the base_url to have http prefix
 		$CI->config->config['base_url'] = str_replace('https://', 'http://', $CI->config->config['base_url']);
@@ -39,12 +39,31 @@ class Ssl {
 			redirect($CI->uri->uri_string());
 		}
 	}
-	
-	/* are we in https mode? */
-	public function is_https() {	
-		return ((!empty($_SERVER['HTTPS']) and strtolower($_SERVER['HTTPS']) !== 'off'));
+
+	/**
+	 * Attempts to detect if the current connection is secure through
+	 * a few different methods.
+	 *
+	 * @return bool
+	 *
+	 * @author	CodeIgniter Dev Team
+	 * @copyright	Copyright (c) 2014 - 2016, British Columbia Institute of Technology (http://bcit.ca/)
+	 * @license	http://opensource.org/licenses/MIT	MIT License
+	 */
+	public function is_https() {
+		if (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == '443') {
+			return true;
+		} elseif (isset($_SERVER['HTTP_X_FORWARDED_PORT']) && $_SERVER['HTTP_X_FORWARDED_PORT'] == '443') {
+			return true;
+		} elseif (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
+			return true;
+		} elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') {
+			return true;
+		}
+
+		return false;
 	}
-	
+
 	/*
 	after creating your keys
 	you will need to move the private key to a safe location
@@ -75,7 +94,7 @@ class Ssl {
 
 		openssl_free_key($private_key);
 	}
-	
+
 	/* encrypt data of any length */
 	public function encrypt($data,$key_file=null) {
 		$file = ($key_file) ? $key_file : __DIR__.'/public.key';
@@ -110,7 +129,7 @@ class Ssl {
 
 		return $output;
 	}
-	
+
 	/* decrypt data of any length */
 	public function decrypt($data,$key_file=null) {
 		$file = ($key_file) ? $key_file : __DIR__.'/private.key';
