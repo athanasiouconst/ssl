@@ -22,7 +22,7 @@
     "orange": {
         "version": "1.0.0",
         "type": "library",
-        "priority": 80,
+        "priority": 110,
         "notes": "",
         "cli": {},
         "help": "",
